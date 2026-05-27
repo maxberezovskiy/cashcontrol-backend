@@ -33,6 +33,15 @@ async def test_login(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_register_duplicate_email(client: AsyncClient):
+    payload = {"email": "dup@example.com", "password": "secret123"}
+    await client.post("/api/v1/auth/register", json=payload)
+    response = await client.post("/api/v1/auth/register", json=payload)
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Email already registered"
+
+
+@pytest.mark.asyncio
 async def test_login_wrong_password(client: AsyncClient):
     await client.post(
         "/api/v1/auth/register",
