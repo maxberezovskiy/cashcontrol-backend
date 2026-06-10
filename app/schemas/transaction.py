@@ -20,6 +20,7 @@ class TransactionCreate(TransactionBase):
 
 
 class TransactionUpdate(BaseModel):
+    amount: Decimal | None = None
     description: str | None = None
     note: str | None = None
     category_id: int | None = None

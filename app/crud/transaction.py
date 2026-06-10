@@ -33,6 +33,42 @@ class CRUDTransaction(CRUDBase[Transaction, TransactionCreate, TransactionUpdate
         await db.refresh(db_obj)
         return db_obj
 
+    async def update(
+        self,
+        db: AsyncSession,
+        *,
+        db_obj: Transaction,
+        obj_in: TransactionUpdate | dict,
+    ) -> Transaction:
+        update_data = obj_in if isinstance(obj_in, dict) else obj_in.model_dump(exclude_unset=True)
+
+        new_amount = update_data.get("amount")
+        if new_amount is not None:
+            new_amount = Decimal(str(new_amount))
+            old_amount = db_obj.amount
+            diff = new_amount - old_amount  # positive means increase
+
+            account = await db.get(Account, db_obj.account_id)
+            if account:
+                if db_obj.transaction_type == "income":
+                    account.balance += diff
+                elif db_obj.transaction_type == "expense":
+                    account.balance -= diff
+                elif db_obj.transaction_type == "transfer":
+                    account.balance -= diff
+                    if db_obj.to_account_id:
+                        to_account = await db.get(Account, db_obj.to_account_id)
+                        if to_account:
+                            to_account.balance += diff
+
+        for field, value in update_data.items():
+            setattr(db_obj, field, value)
+
+        db.add(db_obj)
+        await db.flush()
+        await db.refresh(db_obj)
+        return db_obj
+
     async def get_by_user(
         self,
         db: AsyncSession,
