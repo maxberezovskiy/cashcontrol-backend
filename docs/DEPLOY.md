@@ -72,6 +72,21 @@ docker compose pull && docker compose up -d
 
 Actions → нужный репозиторий → «Deploy Backend/Frontend» → **Run workflow** → в поле `tag` указать git-SHA предыдущей рабочей версии (виден в истории успешных раннов или `git log --oneline`). Сборка пропускается, на ВМ разворачивается существующий образ.
 
+## Бэкапы БД
+
+На ВМ настроен cron пользователя `deploy`: каждый день в 00:00 UTC (03:00 МСК) скрипт `/opt/cashcontrol/backup.sh` делает `pg_dump` в `/opt/cashcontrol/backups/cashcontrol-YYYY-MM-DD.sql.gz`, проверяет архив и хранит **7 последних** дампов (старые удаляются). Журнал — `backups/backup.log`.
+
+Восстановление из дампа:
+
+```bash
+cd /opt/cashcontrol
+gunzip -c backups/cashcontrol-ДАТА.sql.gz | docker compose exec -T db psql -U postgres -d cashcontrol
+```
+
+(при восстановлении «с нуля» сначала пересоздать пустую БД: `docker compose exec -T db psql -U postgres -c "DROP DATABASE cashcontrol; CREATE DATABASE cashcontrol;"` — бэкенд на это время остановить)
+
+Бэкапы лежат на той же ВМ — от потери самой машины не защищают. При появлении ценных данных стоит добавить выгрузку в офсайт (S3/rclone).
+
 ## Типовые проблемы
 
 | Симптом | Причина / решение |
