@@ -35,7 +35,8 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 REFRESH_TOKEN_EXPIRE_DAYS=30
 ALLOWED_ORIGINS=["http://YOUR_VM_IP"]
-TAG=latest
+BACKEND_TAG=latest
+FRONTEND_TAG=latest
 EOF
 chmod 600 .env
 
@@ -62,7 +63,7 @@ docker compose pull && docker compose up -d
 ## Как устроен деплой
 
 - Образы тегируются `latest` **и** git-SHA — каждый деплой воспроизводим.
-- Деплой-скрипт пишет `TAG=<sha>` в `/opt/cashcontrol/.env`, поэтому `docker compose` на ВМ всегда знает, какая версия запущена (`grep TAG /opt/cashcontrol/.env`).
+- У каждого сервиса свой тег: деплой бэкенда пишет `BACKEND_TAG=<sha>`, фронтенда — `FRONTEND_TAG=<sha>` в `/opt/cashcontrol/.env`; запущенные версии видны через `grep TAG /opt/cashcontrol/.env`. Раздельные переменные обязательны: SHA-теги двух репозиториев не совпадают, общий тег ломал бы соседний сервис.
 - Миграции Alembic выполняются автоматически при старте контейнера бэкенда (`command` в compose).
 - После рестарта сервиса выполняется smoke-test (`curl` через nginx); при провале джоба падает и в логи попадает хвост логов контейнера.
 - `environment: production` в воркфлоу позволяет включить ручное подтверждение деплоя (Settings → Environments → production → required reviewers).

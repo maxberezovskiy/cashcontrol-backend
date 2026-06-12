@@ -63,7 +63,7 @@ jobs:
           script_stop: true
           script: |
             cd /opt/cashcontrol
-            grep -q '^TAG=' .env && sed -i "s/^TAG=.*/TAG=$TAG/" .env || echo "TAG=$TAG" >> .env
+            grep -q '^BACKEND_TAG=' .env && sed -i "s/^BACKEND_TAG=.*/BACKEND_TAG=$TAG/" .env || echo "BACKEND_TAG=$TAG" >> .env
             docker compose pull backend
             docker compose up -d backend
             # Smoke test through nginx: backend must answer before we call it done
