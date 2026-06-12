@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Sequence
 
 from sqlalchemy import and_, func, select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import CRUDBase
@@ -12,22 +13,52 @@ from app.schemas.transaction import TransactionCreate, TransactionUpdate
 
 
 class CRUDTransaction(CRUDBase[Transaction, TransactionCreate, TransactionUpdate]):
+    @staticmethod
+    def _balance_deltas(
+        transaction_type: str,
+        account_id: int,
+        to_account_id: int | None,
+        amount: Decimal,
+    ) -> list[tuple[int, Decimal]]:
+        """Effect of a transaction on account balances as (account_id, delta) pairs.
+
+        Pass the transaction amount on create, the amount diff on update,
+        and the negated amount on delete.
+        """
+        if transaction_type == "income":
+            return [(account_id, amount)]
+        if transaction_type == "expense":
+            return [(account_id, -amount)]
+        if transaction_type == "transfer":
+            deltas = [(account_id, -amount)]
+            if to_account_id:
+                deltas.append((to_account_id, amount))
+            return deltas
+        return []
+
+    @staticmethod
+    async def _apply_balance_deltas(
+        db: AsyncSession, deltas: list[tuple[int, Decimal]]
+    ) -> None:
+        # Atomic in-database increments: safe under concurrent edits,
+        # unlike read-modify-write on a loaded Account row.
+        for account_id, delta in deltas:
+            await db.execute(
+                sa_update(Account)
+                .where(Account.id == account_id)
+                .values(balance=Account.balance + delta)
+            )
+
     async def create(self, db: AsyncSession, *, obj_in: TransactionCreate) -> Transaction:
         db_obj = Transaction(**obj_in.model_dump())
         db.add(db_obj)
 
-        # Update account balance
-        account = await db.get(Account, obj_in.account_id)
-        if account:
-            if obj_in.transaction_type == "income":
-                account.balance += obj_in.amount
-            elif obj_in.transaction_type == "expense":
-                account.balance -= obj_in.amount
-            elif obj_in.transaction_type == "transfer" and obj_in.to_account_id:
-                account.balance -= obj_in.amount
-                to_account = await db.get(Account, obj_in.to_account_id)
-                if to_account:
-                    to_account.balance += obj_in.amount
+        await self._apply_balance_deltas(
+            db,
+            self._balance_deltas(
+                obj_in.transaction_type, obj_in.account_id, obj_in.to_account_id, obj_in.amount
+            ),
+        )
 
         await db.flush()
         await db.refresh(db_obj)
@@ -45,21 +76,15 @@ class CRUDTransaction(CRUDBase[Transaction, TransactionCreate, TransactionUpdate
         new_amount = update_data.get("amount")
         if new_amount is not None:
             new_amount = Decimal(str(new_amount))
-            old_amount = db_obj.amount
-            diff = new_amount - old_amount  # positive means increase
-
-            account = await db.get(Account, db_obj.account_id)
-            if account:
-                if db_obj.transaction_type == "income":
-                    account.balance += diff
-                elif db_obj.transaction_type == "expense":
-                    account.balance -= diff
-                elif db_obj.transaction_type == "transfer":
-                    account.balance -= diff
-                    if db_obj.to_account_id:
-                        to_account = await db.get(Account, db_obj.to_account_id)
-                        if to_account:
-                            to_account.balance += diff
+            update_data["amount"] = new_amount
+            diff = new_amount - db_obj.amount  # positive means increase
+            if diff:
+                await self._apply_balance_deltas(
+                    db,
+                    self._balance_deltas(
+                        db_obj.transaction_type, db_obj.account_id, db_obj.to_account_id, diff
+                    ),
+                )
 
         for field, value in update_data.items():
             setattr(db_obj, field, value)
@@ -68,6 +93,19 @@ class CRUDTransaction(CRUDBase[Transaction, TransactionCreate, TransactionUpdate
         await db.flush()
         await db.refresh(db_obj)
         return db_obj
+
+    async def delete(self, db: AsyncSession, *, id: int) -> Transaction | None:
+        obj = await self.get(db, id)
+        if obj:
+            await self._apply_balance_deltas(
+                db,
+                self._balance_deltas(
+                    obj.transaction_type, obj.account_id, obj.to_account_id, -obj.amount
+                ),
+            )
+            await db.delete(obj)
+            await db.flush()
+        return obj
 
     async def get_by_user(
         self,

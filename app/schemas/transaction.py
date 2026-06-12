@@ -1,12 +1,12 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TransactionBase(BaseModel):
     transaction_type: str  # income / expense / transfer
-    amount: Decimal
+    amount: Decimal = Field(gt=0)
     currency: str = "RUB"
     description: str | None = None
     note: str | None = None
@@ -20,7 +20,7 @@ class TransactionCreate(TransactionBase):
 
 
 class TransactionUpdate(BaseModel):
-    amount: Decimal | None = None
+    amount: Decimal | None = Field(None, gt=0)
     description: str | None = None
     note: str | None = None
     category_id: int | None = None
