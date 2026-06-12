@@ -66,7 +66,7 @@ docker compose pull && docker compose up -d
 - У каждого сервиса свой тег: деплой бэкенда пишет `BACKEND_TAG=<sha>`, фронтенда — `FRONTEND_TAG=<sha>` в `/opt/cashcontrol/.env`; запущенные версии видны через `grep TAG /opt/cashcontrol/.env`. Раздельные переменные обязательны: SHA-теги двух репозиториев не совпадают, общий тег ломал бы соседний сервис.
 - Миграции Alembic выполняются автоматически при старте контейнера бэкенда (`command` в compose).
 - После рестарта сервиса выполняется smoke-test (`curl` через nginx); при провале джоба падает и в логи попадает хвост логов контейнера.
-- `environment: production` в воркфлоу позволяет включить ручное подтверждение деплоя (Settings → Environments → production → required reviewers).
+- **Релиз — по кнопке**: на окружении `production` включены required reviewers (в обоих репо: Settings → Environments → production). Каждый пуш в `main` собирает и публикует образ в GHCR, но деплой-джоба останавливается со статусом «Waiting» — на ВМ уезжает только сборка, одобренная в Actions кнопкой **Review deployments → Approve and deploy**. Неодобренные сборки остаются в GHCR со своими SHA-тегами, их можно потестировать локально: `BACKEND_TAG=<sha> docker compose -f docker-compose.prod.yml up backend`.
 
 ## Откат
 
