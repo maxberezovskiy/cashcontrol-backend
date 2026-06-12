@@ -38,6 +38,10 @@ npm run dev
 
 Скрипты фронтенда: `npm run dev` (dev-сервер), `npm run build` (прод-сборка), `npm run preview` (просмотр сборки), `npm run lint` (ESLint), `npm test` (Jest).
 
+### Деплой на сервер
+
+Пуш в `main` автоматически собирает образы, публикует их в GHCR и обновляет сервисы на ВМ (`.github/workflows/deploy.yml` в обоих репозиториях + `docker-compose.prod.yml`). Настройка ВМ, секреты и откат — в [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ---
 
 ## Архитектура
