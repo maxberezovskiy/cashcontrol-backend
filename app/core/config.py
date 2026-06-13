@@ -19,9 +19,17 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # Telegram bot
+    # Общий секрет между backend и ботом для сервисных endpoint-ов /telegram/link и /telegram/token
+    BOT_API_SECRET: str = "change-me-bot-secret"
+    # Время жизни одноразового кода привязки Telegram (в минутах)
+    TELEGRAM_LINK_CODE_TTL_MINUTES: int = 10
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+        # В общем .env живут и переменные бота (BOT_TOKEN, BOT_USERNAME) — backend их не знает
+        extra = "ignore"
 
 
 settings = Settings()

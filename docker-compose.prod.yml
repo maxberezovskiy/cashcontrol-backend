@@ -35,5 +35,16 @@ services:
     ports:
       - "80:80"
 
+  bot:
+    image: ghcr.io/maxberezovskiy/cashcontrol-bot:${BOT_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      BACKEND_URL: http://backend:8000/api/v1
+      BOT_TOKEN: ${BOT_TOKEN:?set BOT_TOKEN in .env}
+      BOT_API_SECRET: ${BOT_API_SECRET:?set BOT_API_SECRET in .env}
+      BOT_USERNAME: ${BOT_USERNAME:-}
+
 volumes:
   postgres_data:

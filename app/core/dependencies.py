@@ -1,8 +1,11 @@
-from fastapi import Depends, HTTPException, status
+import secrets
+
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import decode_token
 from app.db.session import get_db
 from app.crud.user import crud_user
@@ -38,3 +41,22 @@ async def get_current_active_user(current_user=Depends(get_current_user)):
     if not current_user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
+
+
+# Плейсхолдер из config/.env.example — с ним сервисные endpoint-ы должны быть закрыты
+_PLACEHOLDER_BOT_SECRET = "change-me-bot-secret"
+
+
+async def verify_bot_secret(x_bot_secret: str = Header(default="")):
+    """Сервисная авторизация бота по общему секрету (заголовок X-Bot-Secret)."""
+    configured = settings.BOT_API_SECRET
+    if not configured or configured == _PLACEHOLDER_BOT_SECRET:
+        # Без явно заданного секрета endpoint выдачи токенов не должен работать
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Bot API secret is not configured",
+        )
+    if not secrets.compare_digest(x_bot_secret, configured):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid bot secret"
+        )
