@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     BOT_API_SECRET: str = "change-me-bot-secret"
     # Время жизни одноразового кода привязки Telegram (в минутах)
     TELEGRAM_LINK_CODE_TTL_MINUTES: int = 10
+    # Короткий срок жизни JWT, выдаваемых боту через /telegram/token
+    # (бот часто переспрашивает токен; ограничивает окно после /unlink и при утечке)
+    BOT_TOKEN_EXPIRE_MINUTES: int = 15
 
     class Config:
         env_file = ".env"
@@ -33,3 +36,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Fail-closed: не запускаемся со слабым/дефолтным ключом подписи JWT.
+# (BOT_API_SECRET закрыт аналогично в verify_bot_secret.)
+if "change-me" in settings.SECRET_KEY or len(settings.SECRET_KEY) < 24:
+    raise RuntimeError(
+        "SECRET_KEY не задан или использует плейсхолдер. "
+        "Сгенерируйте надёжный ключ (openssl rand -hex 32) и пропишите в .env."
+    )

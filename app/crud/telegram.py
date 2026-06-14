@@ -48,8 +48,17 @@ class CRUDTelegramLinkCode:
         return result.scalar_one_or_none()
 
     async def consume(self, db: AsyncSession, *, code: str) -> TelegramLinkCode | None:
-        """Возвращает валидный код и помечает его использованным, либо None."""
-        link_code = await self._get_by_code(db, code=code.strip().upper())
+        """Атомарно возвращает валидный код и помечает использованным, либо None.
+
+        Берём блокировку строки (FOR UPDATE), чтобы два параллельных /link с одним
+        кодом не прошли оба (TOCTOU): второй дождётся коммита первого и увидит used=True.
+        """
+        result = await db.execute(
+            select(TelegramLinkCode)
+            .where(TelegramLinkCode.code == code.strip().upper())
+            .with_for_update()
+        )
+        link_code = result.scalar_one_or_none()
         if link_code is None or link_code.used:
             return None
         expires_at = link_code.expires_at

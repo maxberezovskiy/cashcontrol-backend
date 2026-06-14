@@ -9,10 +9,13 @@ from app.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-def create_access_token(subject: Any) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+def create_access_token(subject: Any, expires_minutes: int | None = None) -> str:
+    minutes = (
+        expires_minutes
+        if expires_minutes is not None
+        else settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
+    expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 

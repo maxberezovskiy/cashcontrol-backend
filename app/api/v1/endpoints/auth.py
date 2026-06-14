@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ratelimit import login_limiter
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.crud.user import crud_user
 from app.db.session import get_db
@@ -25,6 +26,12 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
+    # Анти-брутфорс: лимит попыток входа на e-mail
+    if not login_limiter.allow(form_data.username.strip().lower()):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много попыток входа. Попробуйте через минуту.",
+        )
     user = await crud_user.authenticate(db, email=form_data.username, password=form_data.password)
     if not user:
         raise HTTPException(

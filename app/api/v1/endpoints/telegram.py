@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.dependencies import get_current_active_user, verify_bot_secret
 from app.core.security import create_access_token, create_refresh_token
 from app.crud.telegram import crud_telegram_link_code
@@ -82,6 +83,8 @@ async def bot_token(body: BotTokenRequest, db: AsyncSession = Depends(get_db)):
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
     return BotTokenResponse(
-        access_token=create_access_token(user.id),
+        access_token=create_access_token(
+            user.id, expires_minutes=settings.BOT_TOKEN_EXPIRE_MINUTES
+        ),
         refresh_token=create_refresh_token(user.id),
     )
