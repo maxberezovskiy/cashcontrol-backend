@@ -43,6 +43,19 @@ async def get_current_active_user(current_user=Depends(get_current_user)):
     return current_user
 
 
+async def get_current_superuser(current_user=Depends(get_current_active_user)):
+    """Доступ только для суперпользователя (роль admin).
+
+    Роль перепроверяется по БД (через get_current_user), а не из JWT-claim,
+    чтобы снятие прав действовало немедленно для следующего запроса.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав"
+        )
+    return current_user
+
+
 # Плейсхолдер из config/.env.example — с ним сервисные endpoint-ы должны быть закрыты
 _PLACEHOLDER_BOT_SECRET = "change-me-bot-secret"
 

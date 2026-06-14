@@ -1,4 +1,6 @@
-from sqlalchemy import select
+from typing import Sequence
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_password_hash, verify_password
@@ -34,6 +36,57 @@ class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
         if not verify_password(password, user.hashed_password):
             return None
         return user
+
+    async def search(
+        self,
+        db: AsyncSession,
+        *,
+        q: str | None = None,
+        is_active: bool | None = None,
+        role: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[Sequence[User], int]:
+        conditions = []
+        if q:
+            like = f"%{q}%"
+            conditions.append(or_(User.email.ilike(like), User.full_name.ilike(like)))
+        if is_active is not None:
+            conditions.append(User.is_active == is_active)
+        if role is not None:
+            conditions.append(User.is_superuser.is_(role == "admin"))
+
+        base_q = select(User)
+        count_q = select(func.count()).select_from(User)
+        for cond in conditions:
+            base_q = base_q.where(cond)
+            count_q = count_q.where(cond)
+
+        total = (await db.execute(count_q)).scalar_one()
+        result = await db.execute(base_q.order_by(User.id).offset(offset).limit(limit))
+        return result.scalars().all(), total
+
+    async def set_active(self, db: AsyncSession, *, user: User, is_active: bool) -> User:
+        user.is_active = is_active
+        db.add(user)
+        await db.flush()
+        await db.refresh(user)
+        return user
+
+    async def set_role(self, db: AsyncSession, *, user: User, is_superuser: bool) -> User:
+        user.is_superuser = is_superuser
+        db.add(user)
+        await db.flush()
+        await db.refresh(user)
+        return user
+
+    async def count_active_admins(self, db: AsyncSession) -> int:
+        result = await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(User.is_superuser.is_(True), User.is_active.is_(True))
+        )
+        return result.scalar_one()
 
 
 crud_user = CRUDUser(User)

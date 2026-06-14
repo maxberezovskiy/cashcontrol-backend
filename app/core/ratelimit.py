@@ -27,3 +27,6 @@ class RateLimiter:
 
 # Перебор пароля: 5 попыток входа в минуту на e-mail
 login_limiter = RateLimiter(max_calls=5, period_seconds=60)
+
+# Сброс пароля (запрос/подтверждение): 5 обращений за 15 минут на ключ (e-mail или IP)
+password_reset_limiter = RateLimiter(max_calls=5, period_seconds=15 * 60)

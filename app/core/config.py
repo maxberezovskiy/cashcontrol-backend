@@ -19,6 +19,15 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # Email / сброс пароля
+    # Ключ шифрования секретов at-rest (Fernet) для SMTP-пароля. В проде задаётся в env;
+    # в dev при отсутствии выводится из SECRET_KEY (см. app/core/crypto.py).
+    SETTINGS_ENC_KEY: str | None = None
+    # Базовый URL фронтенда для сборки ссылки сброса пароля.
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    # Срок жизни токена сброса пароля (минут).
+    PASSWORD_RESET_TTL_MINUTES: int = 60
+
     # Telegram bot
     # Общий секрет между backend и ботом для сервисных endpoint-ов /telegram/link и /telegram/token
     BOT_API_SECRET: str = "change-me-bot-secret"
