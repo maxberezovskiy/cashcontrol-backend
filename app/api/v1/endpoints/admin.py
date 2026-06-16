@@ -272,6 +272,7 @@ def _smtp_read(cfg: SmtpSettings | None) -> SmtpSettingsRead:
     if cfg is None:
         return SmtpSettingsRead()
     return SmtpSettingsRead(
+        transport=cfg.transport,
         host=cfg.host,
         port=cfg.port,
         username=cfg.username,
@@ -279,6 +280,8 @@ def _smtp_read(cfg: SmtpSettings | None) -> SmtpSettingsRead:
         from_email=cfg.from_email,
         enabled=cfg.enabled,
         password_set=bool(cfg.password_encrypted),
+        api_provider=cfg.api_provider,
+        api_key_set=bool(cfg.api_key_encrypted),
         updated_at=cfg.updated_at,
     )
 

@@ -205,6 +205,14 @@ async def get_current_superuser(current_user = Depends(get_current_active_user))
 - **Шаблон:** «Сброс пароля CashControl» со ссылкой `${FRONTEND_BASE_URL}/reset-password?token=...`,
   срок действия 60 мин; инлайн-HTML + текстовая часть.
 - **Анти-энумерация:** `/auth/password-reset/request` всегда отвечает `200`.
+- **HTTPS-API транспорт (на случай, если провайдер режет исходящий SMTP).** Многие хостинги
+  блокируют исходящие порты 25/465/587 (и даже 2525) — тогда прямой SMTP не работает. Поэтому у
+  почты два транспорта, выбираемых из UI (`smtp_settings.transport` = `smtp` | `api`):
+  - `smtp` — отправка через `aiosmtplib` (как описано выше);
+  - `api` — отправка через **HTTPS-API провайдера по порту 443** (httpx). Поддержан **Brevo**
+    (`POST https://api.brevo.com/v3/smtp/email`); поле `api_provider` расширяемо под другие.
+    API-ключ хранится зашифрованным (`api_key_encrypted`, тот же Fernet), наружу — только флаг
+    `api_key_set`. Поскольку 443 почти нигде не блокируется, это рабочий путь там, где SMTP закрыт.
 
 **Поток (admin-инициированный):**
 ```

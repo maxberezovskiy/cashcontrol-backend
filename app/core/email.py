@@ -9,6 +9,7 @@ import logging
 from email.message import EmailMessage
 
 import aiosmtplib
+import httpx
 
 from app.core.config import settings
 from app.crud.smtp_settings import crud_smtp_settings
@@ -24,17 +25,20 @@ class EmailNotConfigured(Exception):
 async def _resolve_config(require_enabled: bool) -> dict:
     async with AsyncSessionLocal() as db:
         cfg = await crud_smtp_settings.get(db)
-        if cfg is None or not cfg.host:
-            raise EmailNotConfigured("SMTP не настроен")
+        if cfg is None:
+            raise EmailNotConfigured("Почта не настроена")
         if require_enabled and not cfg.enabled:
             raise EmailNotConfigured("Отправка писем выключена (enabled=false)")
         return {
+            "transport": cfg.transport or "smtp",
+            "api_provider": cfg.api_provider,
+            "api_key": crud_smtp_settings.get_decrypted_api_key(cfg),
+            "from_email": cfg.from_email or cfg.username,
             "host": cfg.host,
             "port": cfg.port or 587,
             "username": cfg.username,
             "password": crud_smtp_settings.get_decrypted_password(cfg),
             "use_tls": cfg.use_tls,
-            "from_email": cfg.from_email or cfg.username,
         }
 
 
@@ -48,11 +52,44 @@ def _build_message(c: dict, to: str, subject: str, text: str, html: str) -> Emai
     return message
 
 
+async def _send_via_api(c: dict, to: str, subject: str, text: str, html: str) -> None:
+    """Отправка письма через HTTPS-API провайдера (когда исходящий SMTP закрыт сетью)."""
+    if not c["api_key"] or not c["from_email"]:
+        raise EmailNotConfigured("Не заданы API-ключ или адрес отправителя")
+    provider = c["api_provider"]
+    if provider == "brevo":
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "api-key": c["api_key"],
+            "accept": "application/json",
+            "content-type": "application/json",
+        }
+        payload = {
+            "sender": {"email": c["from_email"]},
+            "to": [{"email": to}],
+            "subject": subject,
+            "htmlContent": html,
+            "textContent": text,
+        }
+    else:
+        raise EmailNotConfigured(f"Неизвестный API-провайдер: {provider!r}")
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(url, headers=headers, json=payload)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"{provider} API {resp.status_code}: {resp.text[:300]}")
+
+
 async def deliver(
     *, to: str, subject: str, text: str, html: str, require_enabled: bool = True
 ) -> None:
-    """Отправить письмо. Бросает EmailNotConfigured / SMTP-исключения наружу."""
+    """Отправить письмо выбранным транспортом. Бросает EmailNotConfigured / ошибки наружу."""
     c = await _resolve_config(require_enabled)
+    if c["transport"] == "api":
+        await _send_via_api(c, to, subject, text, html)
+        return
+    if not c["host"]:
+        raise EmailNotConfigured("SMTP не настроен")
     message = _build_message(c, to, subject, text, html)
     await aiosmtplib.send(
         message,
@@ -62,6 +99,7 @@ async def deliver(
         password=c["password"] or None,
         use_tls=c["use_tls"] == "ssl",
         start_tls=c["use_tls"] == "starttls",
+        timeout=15,
     )
 
 
