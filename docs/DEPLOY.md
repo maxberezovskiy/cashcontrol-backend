@@ -35,6 +35,11 @@ ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
 REFRESH_TOKEN_EXPIRE_DAYS=30
 ALLOWED_ORIGINS=["http://YOUR_VM_IP"]
+# Админ-фича (см. раздел ниже). SMTP-аккаунт здесь НЕ задаётся — вводится из UI суперпользователя.
+SETTINGS_ENC_KEY=PASTE_FERNET_KEY_HERE
+FRONTEND_BASE_URL=http://YOUR_VM_IP
+PASSWORD_RESET_TTL_MINUTES=60
+FIRST_SUPERUSER_EMAIL=berezovskiy.max@mail.ru
 BACKEND_TAG=latest
 FRONTEND_TAG=latest
 EOF
@@ -71,6 +76,25 @@ docker compose pull && docker compose up -d
 ## Откат
 
 Actions → нужный репозиторий → «Deploy Backend/Frontend» → **Run workflow** → в поле `tag` указать git-SHA предыдущей рабочей версии (виден в истории успешных раннов или `git log --oneline`). Сборка пропускается, на ВМ разворачивается существующий образ.
+
+## Суперпользователь и почта (админ-фича)
+
+Полная постановка — `docs/ADMIN_FEATURE.md`, ручные тест-кейсы — `docs/ADMIN_FEATURE_TESTCASES.md`.
+
+**Переменные `.env` (прод):**
+
+| Переменная | Назначение |
+|---|---|
+| `SETTINGS_ENC_KEY` | **Обязателен в проде.** Fernet-ключ для шифрования SMTP-пароля в БД. Постоянный: при потере/смене ранее сохранённый SMTP-пароль не расшифровать — придётся ввести заново через UI. Сгенерировать: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Хранить как секрет рядом с `SECRET_KEY`. |
+| `FRONTEND_BASE_URL` | Публичный URL фронтенда — из него собирается ссылка сброса пароля в письме (`${FRONTEND_BASE_URL}/reset-password?token=...`). |
+| `PASSWORD_RESET_TTL_MINUTES` | Срок жизни токена сброса (по умолчанию 60). |
+| `FIRST_SUPERUSER_EMAIL` | Этот пользователь повышается до admin при каждом старте бэкенда (promote-only, идемпотентно). |
+
+**Первый администратор (бутстрап):** механизм — *promote-only*. Пользователь с `FIRST_SUPERUSER_EMAIL` должен быть зарегистрирован обычным путём (`/auth/register`); на старте бэкенда (`lifespan`) он автоматически получает роль admin. Даже если роль снять через UI, ближайший рестарт вернёт её — это постоянный аварийный доступ. Резервно: `UPDATE users SET is_superuser=true WHERE email='...'` в БД.
+
+**Миграции** `audit_logs`, `smtp_settings`, `password_reset_tokens` применяются автоматически (`alembic upgrade head` в `command` бэкенда) — отдельных действий не требуют.
+
+**Настройка SMTP — из UI, не из env.** Войти под админом → раздел «Настройки SMTP» (`/admin/smtp`) → ввести хост/порт/аккаунт/пароль/TLS/отправителя, включить отправку, проверить кнопкой «Отправить тестовое письмо». Пароль шифруется (`SETTINGS_ENC_KEY`) и наружу из API не отдаётся. **Пока SMTP не настроен или выключен — письма не уходят, а ссылка сброса пишется в лог бэкенда** (`docker compose logs backend | grep "DEV EMAIL"`). Желателен SPF/DKIM у почтового провайдера, чтобы письма не падали в спам.
 
 ## Бэкапы БД
 

@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # Срок жизни токена сброса пароля (минут).
     PASSWORD_RESET_TTL_MINUTES: int = 60
 
+    # Бутстрап первого админа: на старте этот пользователь (если зарегистрирован)
+    # повышается до admin (promote-only, идемпотентно). Постоянный аварийный доступ.
+    FIRST_SUPERUSER_EMAIL: str = "berezovskiy.max@mail.ru"
+
     # Telegram bot
     # Общий секрет между backend и ботом для сервисных endpoint-ов /telegram/link и /telegram/token
     BOT_API_SECRET: str = "change-me-bot-secret"

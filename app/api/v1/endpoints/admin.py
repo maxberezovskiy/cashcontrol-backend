@@ -6,15 +6,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import email as email_service
 from app.core.config import settings
 from app.core.dependencies import get_current_superuser
+from app.crud.account import crud_account
 from app.crud.audit_log import crud_audit_log
 from app.crud.password_reset import crud_password_reset
 from app.crud.smtp_settings import crud_smtp_settings
+from app.crud.transaction import crud_transaction
 from app.crud.user import crud_user
 from app.db.session import get_db
 from app.models.smtp_settings import SmtpSettings
 from app.models.user import User
+from app.schemas.account import AccountRead
 from app.schemas.audit import PaginatedAuditLogs
 from app.schemas.settings import SmtpSettingsRead, SmtpSettingsUpdate, SmtpTestRequest
+from app.schemas.transaction import TransactionRead
 from app.schemas.user import (
     PaginatedUsers,
     RoleUpdate,
@@ -221,6 +225,45 @@ async def admin_reset_password(
     )
     background.add_task(email_service.send_password_reset_email, user.email, raw_token)
     return {"detail": "Письмо со ссылкой для сброса пароля отправлено"}
+
+
+# ---- Read-only финансы пользователя ----
+
+@router.get("/users/{user_id}/accounts", response_model=list[AccountRead])
+async def list_user_accounts(
+    user_id: int,
+    _: User = Depends(get_current_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_user_or_404(db, user_id)
+    return await crud_account.get_by_user(db, user_id=user_id)
+
+
+@router.get("/users/{user_id}/transactions", response_model=list[TransactionRead])
+async def list_user_transactions(
+    user_id: int,
+    account_id: int | None = None,
+    category_id: int | None = None,
+    transaction_type: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    offset: int = 0,
+    limit: int = Query(default=50, le=200),
+    _: User = Depends(get_current_superuser),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_user_or_404(db, user_id)
+    return await crud_transaction.get_by_user(
+        db,
+        user_id=user_id,
+        account_id=account_id,
+        category_id=category_id,
+        transaction_type=transaction_type,
+        date_from=date_from,
+        date_to=date_to,
+        offset=offset,
+        limit=limit,
+    )
 
 
 # ---- Настройки SMTP ----

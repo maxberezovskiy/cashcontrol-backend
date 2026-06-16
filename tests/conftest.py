@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import AsyncGenerator
 
 import pytest
@@ -10,7 +11,12 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 
-TEST_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/cashcontrol_test"
+# По умолчанию — локальный postgres (CI); внутри docker-стека переопределяется через
+# TEST_DATABASE_URL (host = db), напр. postgresql+asyncpg://postgres:postgres@db:5432/cashcontrol_test
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/cashcontrol_test",
+)
 
 engine_test = create_async_engine(TEST_DATABASE_URL, echo=False)
 AsyncTestSession = async_sessionmaker(engine_test, expire_on_commit=False)
