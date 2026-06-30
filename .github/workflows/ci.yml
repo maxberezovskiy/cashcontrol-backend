@@ -45,5 +45,7 @@ jobs:
       - name: Run tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/cashcontrol_test
-          SECRET_KEY: test-secret-key
+          # Тестовый ключ: ≥24 символов и без "change-me" — иначе guard в
+          # app/core/config.py падает при импорте конфига (RuntimeError).
+          SECRET_KEY: ci-test-secret-key-0123456789abcdef0123456789abcdef
         run: pytest tests/ -v --tb=short
